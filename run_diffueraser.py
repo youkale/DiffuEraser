@@ -66,7 +66,7 @@ def main():
     parser.add_argument('--input_video', type=str, default="examples/example3/video.mp4", help='Path to the input video')
     parser.add_argument('--input_mask', type=str, default="examples/example3/mask.mp4" , help='Path to the input mask')
     parser.add_argument('--auto_mask', type=float, nargs=4, help='Auto generate mask with relative coordinates: left top right bottom (e.g., 0.1 0.1 0.5 0.5)')
-    parser.add_argument('--video_length', type=int, default=10, help='The maximum length of output video')
+    parser.add_argument('--video_length', type=int, default=None, help='The maximum length of output video')
     parser.add_argument('--mask_dilation_iter', type=int, default=8, help='Adjust it to change the degree of mask expansion')
     parser.add_argument('--max_img_size', type=int, default=960, help='The maximum length of output width and height')
     parser.add_argument('--save_path', type=str, default="results" , help='Path to the output')
@@ -81,6 +81,18 @@ def main():
 
     if not os.path.exists(args.save_path):
         os.makedirs(args.save_path)
+
+    # If video_length is not specified, use the full length of the input video
+    if args.video_length is None:
+        cap = cv2.VideoCapture(args.input_video)
+        if cap.isOpened():
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+            args.video_length = int(frame_count / fps)
+            print(f"Video length not specified. Using full video length: {args.video_length} seconds.")
+            cap.release()
+        else:
+            raise ValueError(f"Could not open video to determine length: {args.input_video}")
 
     if args.auto_mask:
         mask_output_path = os.path.join(args.save_path, "auto_mask.mp4")
