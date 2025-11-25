@@ -77,7 +77,7 @@ def read_mask(validation_mask, fps, n_total_frames, img_size, mask_dilation_iter
         print("Error: Could not open mask video.")
         exit()
     mask_fps = cap.get(cv2.CAP_PROP_FPS)
-    if abs(mask_fps - fps) > 1e-4:
+    if abs(mask_fps - fps) > 1e-2:
         cap.release()
         raise ValueError(f"The frame rate of all input videos needs to be consistent. Mask FPS: {mask_fps}, Video FPS: {fps}")
 
@@ -120,7 +120,7 @@ def read_priori(priori, fps, n_total_frames, img_size):
         print("Error: Could not open video.")
         exit()
     priori_fps = cap.get(cv2.CAP_PROP_FPS)
-    if abs(priori_fps - fps) > 1e-4:
+    if abs(priori_fps - fps) > 1e-2:
         cap.release()
         raise ValueError(f"The frame rate of all input videos needs to be consistent. Priori FPS: {priori_fps}, Video FPS: {fps}")
 
