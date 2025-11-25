@@ -25,10 +25,16 @@ def generate_mask_video(input_video_path, mask_coords, output_mask_path):
     left_rel, top_rel, right_rel, bottom_rel = mask_coords
 
     # Convert relative coordinates to pixels
+    # User specifies origin at bottom-left, so we need to flip Y
+    # OpenCV origin is top-left
     x1 = int(left_rel * width)
-    y1 = int(top_rel * height)
+    y1 = int(height * (1 - top_rel))
     x2 = int(right_rel * width)
-    y2 = int(bottom_rel * height)
+    y2 = int(height * (1 - bottom_rel))
+
+    # Normalize coordinates (ensure start < end)
+    x1, x2 = min(x1, x2), max(x1, x2)
+    y1, y2 = min(y1, y2), max(y1, y2)
 
     # Validate coordinates
     x1 = max(0, min(x1, width - 1))
