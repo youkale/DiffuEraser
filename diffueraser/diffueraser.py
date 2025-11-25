@@ -58,7 +58,7 @@ def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: st
     else:
         raise ValueError(f"{model_class} is not supported.")
 
-def resize_frames(frames, size=None):    
+def resize_frames(frames, size=None):
     if size is not None:
         out_size = size
         process_size = (out_size[0]-out_size[0]%8, out_size[1]-out_size[1]%8)
@@ -68,7 +68,7 @@ def resize_frames(frames, size=None):
         process_size = (out_size[0]-out_size[0]%8, out_size[1]-out_size[1]%8)
         if not out_size == process_size:
             frames = [f.resize(process_size) for f in frames]
-        
+
     return frames
 
 def read_mask(validation_mask, fps, n_total_frames, img_size, mask_dilation_iter, frames):
@@ -77,16 +77,16 @@ def read_mask(validation_mask, fps, n_total_frames, img_size, mask_dilation_iter
         print("Error: Could not open mask video.")
         exit()
     mask_fps = cap.get(cv2.CAP_PROP_FPS)
-    if mask_fps != fps:
+    if abs(mask_fps - fps) > 1e-4:
         cap.release()
-        raise ValueError("The frame rate of all input videos needs to be consistent.")
+        raise ValueError(f"The frame rate of all input videos needs to be consistent. Mask FPS: {mask_fps}, Video FPS: {fps}")
 
     masks = []
     masked_images = []
     idx = 0
     while True:
         ret, frame = cap.read()
-        if not ret:  
+        if not ret:
             break
         if(idx >= n_total_frames):
             break
@@ -120,15 +120,15 @@ def read_priori(priori, fps, n_total_frames, img_size):
         print("Error: Could not open video.")
         exit()
     priori_fps = cap.get(cv2.CAP_PROP_FPS)
-    if priori_fps != fps:
+    if abs(priori_fps - fps) > 1e-4:
         cap.release()
-        raise ValueError("The frame rate of all input videos needs to be consistent.")
+        raise ValueError(f"The frame rate of all input videos needs to be consistent. Priori FPS: {priori_fps}, Video FPS: {fps}")
 
     prioris=[]
     idx = 0
     while True:
         ret, frame = cap.read()
-        if not ret: 
+        if not ret:
             break
         if(idx >= n_total_frames):
             break
@@ -139,7 +139,7 @@ def read_priori(priori, fps, n_total_frames, img_size):
         idx += 1
     cap.release()
 
-    os.remove(priori) # remove priori 
+    os.remove(priori) # remove priori
 
     return prioris
 
@@ -183,7 +183,7 @@ class DiffuEraser:
 
         ## load model
         self.vae = AutoencoderKL.from_pretrained(vae_path)
-        self.noise_scheduler = DDPMScheduler.from_pretrained(base_model_path, 
+        self.noise_scheduler = DDPMScheduler.from_pretrained(base_model_path,
                 subfolder="scheduler",
                 prediction_type="v_prediction",
                 timestep_spacing="trailing",
@@ -245,20 +245,20 @@ class DiffuEraser:
     def forward(self, validation_image, validation_mask, priori, output_path,
                 max_img_size = 1280, video_length=2, mask_dilation_iter=4,
                 nframes=22, seed=None, revision = None, guidance_scale=None, blended=True):
-        validation_prompt = ""  # 
+        validation_prompt = ""  #
         guidance_scale_final = self.guidance_scale if guidance_scale==None else guidance_scale
 
         if (max_img_size<256 or max_img_size>1920):
             raise ValueError("The max_img_size must be larger than 256, smaller than 1920.")
 
-        ################ read input video ################ 
+        ################ read input video ################
         frames, fps, img_size, n_clip, n_total_frames = read_video(validation_image, video_length, nframes, max_img_size)
         video_len = len(frames)
 
-        ################     read mask    ################ 
+        ################     read mask    ################
         validation_masks_input, validation_images_input = read_mask(validation_mask, fps, video_len, img_size, mask_dilation_iter, frames)
-  
-        ################    read priori   ################  
+
+        ################    read priori   ################
         prioris = read_priori(priori, fps, n_total_frames, img_size)
 
         ## recheck
@@ -286,7 +286,7 @@ class DiffuEraser:
 
         ## random noise
         real_video_length = len(validation_images_input)
-        tar_width, tar_height = validation_images_input[0].size 
+        tar_width, tar_height = validation_images_input[0].size
         shape = (
             nframes,
             4,
@@ -299,9 +299,9 @@ class DiffuEraser:
             prompt_embeds_dtype = self.unet_main.dtype
         else:
             prompt_embeds_dtype = torch.float16
-        noise_pre = randn_tensor(shape, device=torch.device(self.device), dtype=prompt_embeds_dtype, generator=generator) 
+        noise_pre = randn_tensor(shape, device=torch.device(self.device), dtype=prompt_embeds_dtype, generator=generator)
         noise = repeat(noise_pre, "t c h w->(repeat t) c h w", repeat=n_clip)[:real_video_length,...]
-        
+
         ################  prepare priori  ################
         images_preprocessed = []
         for image in prioris:
@@ -318,7 +318,7 @@ class DiffuEraser:
                 latents.append(self.vae.encode(pixel_values[i : i + num]).latent_dist.sample())
             latents = torch.cat(latents, dim=0)
         latents = latents * self.vae.config.scaling_factor #[(b f), c1, h, w], c1=4
-        torch.cuda.empty_cache()  
+        torch.cuda.empty_cache()
         timesteps = torch.tensor([0], device=self.device)
         timesteps = timesteps.long()
 
@@ -335,21 +335,21 @@ class DiffuEraser:
             latents_pre = torch.stack([latents[i] for i in sample_index])
 
             ## add proiri
-            noisy_latents_pre = self.noise_scheduler.add_noise(latents_pre, noise_pre, timesteps) 
+            noisy_latents_pre = self.noise_scheduler.add_noise(latents_pre, noise_pre, timesteps)
             latents_pre = noisy_latents_pre
 
             with torch.no_grad():
                 latents_pre_out = self.pipeline(
-                    num_frames=nframes, 
-                    prompt=validation_prompt, 
-                    images=validation_images_input_pre, 
-                    masks=validation_masks_input_pre, 
-                    num_inference_steps=self.num_inference_steps, 
+                    num_frames=nframes,
+                    prompt=validation_prompt,
+                    images=validation_images_input_pre,
+                    masks=validation_masks_input_pre,
+                    num_inference_steps=self.num_inference_steps,
                     generator=generator,
                     guidance_scale=guidance_scale_final,
                     latents=latents_pre,
                 ).latents
-            torch.cuda.empty_cache()  
+            torch.cuda.empty_cache()
 
             def decode_latents(latents, weight_dtype):
                 latents = 1 / self.vae.config.scaling_factor * latents
@@ -363,7 +363,7 @@ class DiffuEraser:
             with torch.no_grad():
                 video_tensor_temp = decode_latents(latents_pre_out, weight_dtype=torch.float16)
                 images_pre_out  = self.image_processor.postprocess(video_tensor_temp, output_type="pil")
-            torch.cuda.empty_cache()  
+            torch.cuda.empty_cache()
 
             ## replace input frames with updated frames
             black_image = Image.new('L', validation_masks_input[0].size, color=0)
@@ -380,15 +380,15 @@ class DiffuEraser:
 
         ################  Frame-by-frame inference  ################
         ## add priori
-        noisy_latents = self.noise_scheduler.add_noise(latents, noise, timesteps) 
+        noisy_latents = self.noise_scheduler.add_noise(latents, noise, timesteps)
         latents = noisy_latents
         with torch.no_grad():
             images = self.pipeline(
-                num_frames=nframes, 
-                prompt=validation_prompt, 
-                images=validation_images_input, 
-                masks=validation_masks_input, 
-                num_inference_steps=self.num_inference_steps, 
+                num_frames=nframes,
+                prompt=validation_prompt,
+                images=validation_images_input,
+                masks=validation_masks_input,
+                num_inference_steps=self.num_inference_steps,
                 generator=generator,
                 guidance_scale=guidance_scale_final,
                 latents=latents,
@@ -408,7 +408,7 @@ class DiffuEraser:
                 binary_mask = 1-(1-np.array(binary_masks[i])/255.) * (1-mask_blurred)
                 mask_blurreds.append(Image.fromarray((binary_mask*255).astype(np.uint8)))
             binary_masks = mask_blurreds
-        
+
         comp_frames = []
         for i in range(len(images)):
             mask = np.expand_dims(np.array(binary_masks[i]),2).repeat(3, axis=2).astype(np.float32)/255.
@@ -426,7 +426,3 @@ class DiffuEraser:
         ################################
 
         return output_path
-            
-
-
-

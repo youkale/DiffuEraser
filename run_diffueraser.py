@@ -19,6 +19,7 @@ def generate_mask_video(input_video_path, mask_coords, output_mask_path):
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = cap.get(cv2.CAP_PROP_FPS)
+    print(f"Input video FPS: {fps}")
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
     left_rel, top_rel, right_rel, bottom_rel = mask_coords
